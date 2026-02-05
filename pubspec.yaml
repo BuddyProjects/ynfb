@@ -1,0 +1,61 @@
+name: ynfb_app
+description: Your Next Favourite Book - AI-powered book recommendations
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.5.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # UI
+  cupertino_icons: ^1.0.8
+  google_fonts: ^6.2.1
+  flutter_rating_bar: ^4.0.1
+  cached_network_image: ^3.4.1
+  shimmer: ^3.0.0
+  
+  # State Management
+  provider: ^6.1.2
+  
+  # Backend
+  supabase_flutter: ^2.8.1
+  
+  # Navigation
+  go_router: ^14.6.1
+  
+  # Local Storage
+  shared_preferences: ^2.3.3
+  
+  # File Handling
+  file_picker: ^8.1.4
+  csv: ^6.0.0
+  
+  # HTTP
+  http: ^1.2.2
+  
+  # Utils
+  intl: ^0.19.0
+  uuid: ^4.5.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/images/
+    - assets/icons/
+
+  # Fonts - uncomment when adding custom fonts
+  # fonts:
+  #   - family: Playfair
+  #     fonts:
+  #       - asset: assets/fonts/PlayfairDisplay-Regular.ttf
+  #       - asset: assets/fonts/PlayfairDisplay-Bold.ttf
+  #         weight: 700
