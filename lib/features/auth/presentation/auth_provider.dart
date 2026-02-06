@@ -29,7 +29,7 @@ class AuthProvider extends ChangeNotifier {
 
   void _init() {
     // Listen to auth state changes
-    _supabaseService.client.auth.onAuthStateChange.listen((data) async {
+    _supabaseService.authStateChanges.listen((data) async {
       final session = data.session;
       if (session != null) {
         await _loadUserProfile(session.user.id);

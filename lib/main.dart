@@ -8,6 +8,7 @@ import 'core/theme/app_typography.dart';
 import 'services/supabase_service.dart';
 import 'services/open_library_service.dart';
 import 'services/ai_recommendation_service.dart';
+import 'features/auth/presentation/auth_provider.dart';
 import 'features/library/domain/book.dart';
 import 'features/library/presentation/library_provider.dart';
 import 'features/library/presentation/library_screen.dart';
@@ -157,12 +158,7 @@ class _MainShellState extends State<MainShell> {
         builder: (_) => ManualAddScreen(
           onBookSelected: (book) {
             final libraryProvider = context.read<LibraryProvider>();
-            final authProvider = context.read<AuthProvider>();
-            libraryProvider.addBook(
-              book: book,
-              userId: authProvider.user?.id ?? 'demo-user',
-              source: BookSource.manual,
-            );
+            libraryProvider.addBook(book, 'demo-user', BookSource.manual);
             Navigator.pop(context);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(

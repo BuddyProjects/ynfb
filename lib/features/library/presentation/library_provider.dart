@@ -161,28 +161,6 @@ class LibraryProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
-  
-  /// Add a single book to the library
-  void addBook({
-    required Book book,
-    required String userId,
-    required BookSource source,
-  }) {
-    final userBook = UserBook(
-      id: _uuid.v4(),
-      userId: userId,
-      book: book,
-      source: source,
-      addedAt: DateTime.now(),
-    );
-    _books.insert(0, userBook);
-    notifyListeners();
-    
-    // Sync to Supabase in background
-    _supabaseService.addUserBook(userBook).catchError((e) {
-      debugPrint('Failed to sync book to Supabase: $e');
-    });
-  }
 
   /// Import books from a parsed CSV or JSON
   Future<int> importBooks({
