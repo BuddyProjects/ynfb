@@ -192,7 +192,32 @@ class BookCard extends StatelessWidget {
   }
 
   Widget _buildRatingWidget({bool small = false}) {
-    final itemSize = small ? 14.0 : 18.0;
+    final itemSize = small ? 18.0 : 22.0; // Slightly larger for better touch targets
+    
+    if (rating == null && onRatingChanged != null) {
+      // Show prompt to rate when book hasn't been rated yet
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {}, // Absorb taps
+        child: RatingBar.builder(
+          initialRating: 0,
+          minRating: 0.5,
+          direction: Axis.horizontal,
+          allowHalfRating: true,
+          itemCount: 5,
+          itemSize: itemSize,
+          itemPadding: const EdgeInsets.symmetric(horizontal: 2),
+          itemBuilder: (context, _) => const Icon(
+            Icons.star_rounded,
+            color: AppColors.starFilled,
+          ),
+          unratedColor: AppColors.starEmpty.withAlpha(100),
+          onRatingUpdate: (value) {
+            onRatingChanged?.call(value * 2);
+          },
+        ),
+      );
+    }
     
     if (rating == null && onRatingChanged == null) {
       return Text(
@@ -204,24 +229,29 @@ class BookCard extends StatelessWidget {
       );
     }
 
-    return RatingBar.builder(
-      initialRating: (rating ?? 0) / 2, // Convert 0-10 to 0-5 stars
-      minRating: 0,
-      direction: Axis.horizontal,
-      allowHalfRating: true,
-      itemCount: 5,
-      itemSize: itemSize,
-      itemPadding: const EdgeInsets.symmetric(horizontal: 1),
-      itemBuilder: (context, _) => const Icon(
-        Icons.star_rounded,
-        color: AppColors.starFilled,
+    // Wrap in GestureDetector to prevent parent onTap from intercepting
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {}, // Absorb taps so parent doesn't get them
+      child: RatingBar.builder(
+        initialRating: (rating ?? 0) / 2, // Convert 0-10 to 0-5 stars
+        minRating: 0.5, // Minimum half star
+        direction: Axis.horizontal,
+        allowHalfRating: true,
+        itemCount: 5,
+        itemSize: itemSize,
+        itemPadding: const EdgeInsets.symmetric(horizontal: 2),
+        itemBuilder: (context, _) => const Icon(
+          Icons.star_rounded,
+          color: AppColors.starFilled,
+        ),
+        unratedColor: AppColors.starEmpty,
+        onRatingUpdate: (value) {
+          // Convert 0-5 stars to 0-10 scale
+          onRatingChanged?.call(value * 2);
+        },
+        ignoreGestures: onRatingChanged == null,
       ),
-      unratedColor: AppColors.starEmpty,
-      onRatingUpdate: (value) {
-        // Convert 0-5 stars to 0-10 scale
-        onRatingChanged?.call(value * 2);
-      },
-      ignoreGestures: onRatingChanged == null,
     );
   }
 }

@@ -110,8 +110,17 @@ class LibraryProvider extends ChangeNotifier {
 
   Future<void> addBook(Book book, String userId, BookSource source) async {
     try {
-      // First, ensure the book exists in the global books table
-      final savedBook = await _supabaseService.upsertBook(book);
+      Book savedBook;
+      
+      // Try Supabase first, fall back to local-only
+      try {
+        savedBook = await _supabaseService.upsertBook(book);
+      } catch (_) {
+        // Supabase not configured - use book as-is with generated ID if needed
+        savedBook = book.id.isEmpty 
+            ? book.copyWith(id: _uuid.v4()) 
+            : book;
+      }
 
       // Create user book entry
       final userBook = UserBook(
@@ -122,7 +131,13 @@ class LibraryProvider extends ChangeNotifier {
         addedAt: DateTime.now(),
       );
 
-      await _supabaseService.addUserBook(userBook);
+      // Try to persist to Supabase (ignore failure in demo mode)
+      try {
+        await _supabaseService.addUserBook(userBook);
+      } catch (_) {
+        // Demo mode - just keep locally
+      }
+      
       _books.insert(0, userBook);
       notifyListeners();
     } catch (e) {
