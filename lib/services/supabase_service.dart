@@ -32,7 +32,7 @@ class SupabaseService {
     );
   }
 
-  Future<AuthResponse> signInWithGoogle() async {
+  Future<bool> signInWithGoogle() async {
     return await client.auth.signInWithOAuth(
       OAuthProvider.google,
       redirectTo: 'com.ynfb.ynfb_app://login-callback/',
