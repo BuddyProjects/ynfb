@@ -133,7 +133,7 @@ class _MainShellState extends State<MainShell> {
             Navigator.pop(context);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Import from ${source.name} coming soon!'),
+                content: Text('Import from ${source.label} coming soon!'),
                 backgroundColor: AppColors.forestGreen,
               ),
             );
@@ -294,7 +294,7 @@ class _BookDetailSheet extends StatelessWidget {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        'From: ${userBook.source.name}',
+                        'From: ${userBook.source.label}',
                         style: AppTypography.labelSmall,
                       ),
                     ),

@@ -4,7 +4,47 @@ enum BookSource {
   audible,
   kindle,
   goodreads,
-  manual,
+  manual;
+
+  String get label {
+    switch (this) {
+      case BookSource.audible:
+        return 'Audible';
+      case BookSource.kindle:
+        return 'Kindle';
+      case BookSource.goodreads:
+        return 'Goodreads';
+      case BookSource.manual:
+        return 'Manual';
+    }
+  }
+
+  String get jsonValue {
+    switch (this) {
+      case BookSource.audible:
+        return 'audible';
+      case BookSource.kindle:
+        return 'kindle';
+      case BookSource.goodreads:
+        return 'goodreads';
+      case BookSource.manual:
+        return 'manual';
+    }
+  }
+
+  static BookSource fromJson(String? value) {
+    switch (value) {
+      case 'audible':
+        return BookSource.audible;
+      case 'kindle':
+        return BookSource.kindle;
+      case 'goodreads':
+        return BookSource.goodreads;
+      case 'manual':
+      default:
+        return BookSource.manual;
+    }
+  }
 }
 
 @immutable
@@ -134,10 +174,7 @@ class UserBook {
       id: json['id'] as String,
       userId: json['user_id'] as String,
       book: book,
-      source: BookSource.values.firstWhere(
-        (e) => e.name == json['source'],
-        orElse: () => BookSource.manual,
-      ),
+      source: BookSource.fromJson(json['source'] as String?),
       rating: (json['rating'] as num?)?.toDouble(),
       addedAt: DateTime.parse(json['added_at'] as String),
       ratedAt: json['rated_at'] != null
@@ -151,7 +188,7 @@ class UserBook {
       'id': id,
       'user_id': userId,
       'book_id': book.id,
-      'source': source.name,
+      'source': source.jsonValue,
       'rating': rating,
       'added_at': addedAt.toIso8601String(),
       'rated_at': ratedAt?.toIso8601String(),

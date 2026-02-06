@@ -114,7 +114,7 @@ class SupabaseService {
       'id': userBook.id,
       'user_id': userBook.userId,
       'book_id': userBook.book.id,
-      'source': userBook.source.name,
+      'source': userBook.source.jsonValue,
       'rating': userBook.rating,
       'added_at': userBook.addedAt.toIso8601String(),
       'rated_at': userBook.ratedAt?.toIso8601String(),
