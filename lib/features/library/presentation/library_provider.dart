@@ -132,20 +132,22 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   Future<void> updateRating(String userBookId, double rating) async {
+    // Update locally first for instant feedback
+    final index = _books.indexWhere((b) => b.id == userBookId);
+    if (index != -1) {
+      _books[index] = _books[index].copyWith(
+        rating: rating,
+        ratedAt: DateTime.now(),
+      );
+      notifyListeners();
+    }
+    
+    // Then sync to Supabase (fire and forget for now)
     try {
       await _supabaseService.updateBookRating(userBookId, rating);
-      
-      final index = _books.indexWhere((b) => b.id == userBookId);
-      if (index != -1) {
-        _books[index] = _books[index].copyWith(
-          rating: rating,
-          ratedAt: DateTime.now(),
-        );
-        notifyListeners();
-      }
     } catch (e) {
-      _errorMessage = 'Failed to update rating: $e';
-      notifyListeners();
+      // Silently fail - local update already happened
+      debugPrint('Failed to sync rating to Supabase: $e');
     }
   }
 
@@ -158,6 +160,28 @@ class LibraryProvider extends ChangeNotifier {
       _errorMessage = 'Failed to remove book: $e';
       notifyListeners();
     }
+  }
+  
+  /// Add a single book to the library
+  void addBook({
+    required Book book,
+    required String userId,
+    required BookSource source,
+  }) {
+    final userBook = UserBook(
+      id: _uuid.v4(),
+      userId: userId,
+      book: book,
+      source: source,
+      addedAt: DateTime.now(),
+    );
+    _books.insert(0, userBook);
+    notifyListeners();
+    
+    // Sync to Supabase in background
+    _supabaseService.addUserBook(userBook).catchError((e) {
+      debugPrint('Failed to sync book to Supabase: $e');
+    });
   }
 
   /// Import books from a parsed CSV or JSON

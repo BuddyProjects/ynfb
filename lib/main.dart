@@ -128,12 +128,45 @@ class _MainShellState extends State<MainShell> {
       MaterialPageRoute(
         builder: (_) => ImportScreen(
           onSourceSelected: (source) {
-            // For now, just show a message about the source
-            // In full implementation, navigate to source-specific guides
+            Navigator.pop(context); // Close import screen
+            
+            switch (source) {
+              case BookSource.manual:
+                _openManualAddScreen();
+                break;
+              case BookSource.audible:
+              case BookSource.kindle:
+              case BookSource.goodreads:
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Import from ${source.label} coming soon!'),
+                    backgroundColor: AppColors.forestGreen,
+                  ),
+                );
+                break;
+            }
+          },
+        ),
+      ),
+    );
+  }
+  
+  void _openManualAddScreen() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ManualAddScreen(
+          onBookSelected: (book) {
+            final libraryProvider = context.read<LibraryProvider>();
+            final authProvider = context.read<AuthProvider>();
+            libraryProvider.addBook(
+              book: book,
+              userId: authProvider.user?.id ?? 'demo-user',
+              source: BookSource.manual,
+            );
             Navigator.pop(context);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Import from ${source.label} coming soon!'),
+                content: Text('Added "${book.title}" to your library!'),
                 backgroundColor: AppColors.forestGreen,
               ),
             );

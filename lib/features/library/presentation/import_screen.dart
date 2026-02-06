@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/cozy_button.dart';
+import '../../../services/open_library_service.dart';
 import '../domain/book.dart';
 
 class ImportScreen extends StatelessWidget {
@@ -506,8 +507,10 @@ class ManualAddScreen extends StatefulWidget {
 
 class _ManualAddScreenState extends State<ManualAddScreen> {
   final _searchController = TextEditingController();
+  final _openLibrary = OpenLibraryService();
   List<Book> _searchResults = [];
   bool _isSearching = false;
+  String? _error;
 
   @override
   void dispose() {
@@ -519,17 +522,23 @@ class _ManualAddScreenState extends State<ManualAddScreen> {
     final query = _searchController.text.trim();
     if (query.isEmpty) return;
 
-    setState(() => _isSearching = true);
-
-    // TODO: Implement actual search via LibraryProvider
-    // For now, show placeholder
-    await Future.delayed(const Duration(seconds: 1));
-
     setState(() {
-      _isSearching = false;
-      // Placeholder results
-      _searchResults = [];
+      _isSearching = true;
+      _error = null;
     });
+
+    try {
+      final results = await _openLibrary.searchBooks(query, limit: 20);
+      setState(() {
+        _searchResults = results;
+        _isSearching = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = 'Search failed. Check your connection.';
+        _isSearching = false;
+      });
+    }
   }
 
   @override
@@ -602,21 +611,26 @@ class _ManualAddScreenState extends State<ManualAddScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.search_rounded,
+              _error != null ? Icons.error_outline_rounded : Icons.search_rounded,
               size: 64,
-              color: AppColors.textLight,
+              color: _error != null ? AppColors.error : AppColors.textLight,
             ),
             const SizedBox(height: 16),
             Text(
-              'Search for books',
-              style: AppTypography.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Enter a title or author to find books to add to your library.',
-              style: AppTypography.bodyMedium,
+              _error ?? 'Search for books',
+              style: AppTypography.titleMedium.copyWith(
+                color: _error != null ? AppColors.error : null,
+              ),
               textAlign: TextAlign.center,
             ),
+            if (_error == null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Enter a title or author to find books to add to your library.',
+                style: AppTypography.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
+            ],
           ],
         ),
       ),
