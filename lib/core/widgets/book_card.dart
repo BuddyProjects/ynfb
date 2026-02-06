@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../features/library/domain/book.dart';
+import '../../features/auth/domain/user.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 
@@ -50,28 +52,32 @@ class BookCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Book cover
-            ClipRRect(
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(16)),
-              child: AspectRatio(
-                aspectRatio: 2 / 3,
-                child: _buildCoverImage(),
+            // Book cover - takes up available space
+            Expanded(
+              flex: 3,
+              child: ClipRRect(
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(16)),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: _buildCoverImage(),
+                ),
               ),
             ),
-            // Book info
+            // Book info - fixed height section
             Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     book.title,
-                    style: AppTypography.titleSmall,
-                    maxLines: 2,
+                    style: AppTypography.labelMedium,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
                     book.author,
                     style: AppTypography.bodySmall,
@@ -79,8 +85,8 @@ class BookCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   if (showRating) ...[
-                    const SizedBox(height: 8),
-                    _buildRatingWidget(),
+                    const SizedBox(height: 6),
+                    _buildRatingWidget(small: true),
                   ],
                 ],
               ),
@@ -227,6 +233,7 @@ class RecommendationBookCard extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onWishlist;
   final VoidCallback? onNotInterested;
+  final AffiliatePreference affiliatePreference;
 
   const RecommendationBookCard({
     super.key,
@@ -235,7 +242,33 @@ class RecommendationBookCard extends StatelessWidget {
     this.onTap,
     this.onWishlist,
     this.onNotInterested,
+    this.affiliatePreference = AffiliatePreference.amazon,
   });
+
+  String _getAffiliateUrl() {
+    // Amazon search URL with affiliate tag placeholder
+    const amazonTag = 'ynfb-20'; // Replace with real affiliate tag
+    const bookshopTag = 'ynfb'; // Replace with real affiliate tag
+    
+    final searchQuery = Uri.encodeComponent('${book.title} ${book.author}');
+    
+    if (affiliatePreference == AffiliatePreference.bookshop) {
+      return 'https://bookshop.org/search?keywords=$searchQuery&affiliate=$bookshopTag';
+    }
+    
+    // Default to Amazon
+    if (book.amazonAsin != null) {
+      return 'https://www.amazon.com/dp/${book.amazonAsin}?tag=$amazonTag';
+    }
+    return 'https://www.amazon.com/s?k=$searchQuery&tag=$amazonTag';
+  }
+
+  Future<void> _launchBuyUrl() async {
+    final url = Uri.parse(_getAffiliateUrl());
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -321,6 +354,16 @@ class RecommendationBookCard extends StatelessWidget {
                   // Actions
                   Row(
                     children: [
+                      // Buy button
+                      _ActionButton(
+                        icon: Icons.shopping_cart_outlined,
+                        label: affiliatePreference == AffiliatePreference.bookshop 
+                            ? 'Bookshop' 
+                            : 'Amazon',
+                        onTap: _launchBuyUrl,
+                        isPrimary: true,
+                      ),
+                      const SizedBox(width: 12),
                       if (onWishlist != null)
                         _ActionButton(
                           icon: Icons.bookmark_border_rounded,
@@ -388,38 +431,47 @@ class _ActionButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
   final bool isSecondary;
+  final bool isPrimary;
 
   const _ActionButton({
     required this.icon,
     required this.label,
     required this.onTap,
     this.isSecondary = false,
+    this.isPrimary = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
+    final color = isPrimary 
+        ? Colors.white 
+        : (isSecondary ? AppColors.textLight : AppColors.burntOrange);
+    
+    return Material(
+      color: isPrimary ? AppColors.forestGreen : Colors.transparent,
       borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 18,
-              color: isSecondary ? AppColors.textLight : AppColors.burntOrange,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: AppTypography.labelSmall.copyWith(
-                color:
-                    isSecondary ? AppColors.textLight : AppColors.burntOrange,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: isPrimary ? 12 : 8,
+            vertical: isPrimary ? 8 : 4,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 18, color: color),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: AppTypography.labelSmall.copyWith(
+                  color: color,
+                  fontWeight: isPrimary ? FontWeight.w600 : null,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

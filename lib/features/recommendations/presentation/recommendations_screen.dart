@@ -4,6 +4,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/book_card.dart';
 import '../../../core/widgets/cozy_button.dart';
+import '../../auth/domain/user.dart';
+import '../../auth/presentation/auth_provider.dart';
 import '../../library/domain/book.dart';
 import '../../library/presentation/library_provider.dart';
 import '../domain/recommendation.dart';
@@ -20,6 +22,7 @@ class _RecommendationsScreenState extends State<RecommendationsScreen> {
   RecommendationMode _selectedMode = RecommendationMode.surpriseMe;
   UserBook? _selectedBook;
   String? _selectedGenre;
+  bool _showHistory = false;
 
   final List<String> _genres = [
     'Fiction',
@@ -39,12 +42,29 @@ class _RecommendationsScreenState extends State<RecommendationsScreen> {
     return Scaffold(
       backgroundColor: AppColors.cream,
       appBar: AppBar(
-        title: Text('Get Recommendations', style: AppTypography.headlineMedium),
+        title: Text(
+          _showHistory ? 'Recommendation History' : 'Get Recommendations',
+          style: AppTypography.headlineMedium,
+        ),
+        actions: [
+          IconButton(
+            icon: Icon(
+              _showHistory ? Icons.add_rounded : Icons.history_rounded,
+              color: AppColors.textMedium,
+            ),
+            onPressed: () => setState(() => _showHistory = !_showHistory),
+            tooltip: _showHistory ? 'New Recommendation' : 'View History',
+          ),
+        ],
       ),
       body: Consumer2<RecommendationsProvider, LibraryProvider>(
         builder: (context, recsProvider, libraryProvider, _) {
           if (recsProvider.isLoading) {
             return _buildLoadingState();
+          }
+
+          if (_showHistory) {
+            return _buildHistoryView(recsProvider);
           }
 
           if (recsProvider.currentRecommendations.isNotEmpty) {
@@ -55,6 +75,118 @@ class _RecommendationsScreenState extends State<RecommendationsScreen> {
         },
       ),
     );
+  }
+
+  Widget _buildHistoryView(RecommendationsProvider provider) {
+    if (provider.history.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(40),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.history_rounded, size: 64, color: AppColors.textLight),
+              const SizedBox(height: 16),
+              Text('No history yet', style: AppTypography.titleMedium),
+              const SizedBox(height: 8),
+              Text(
+                'Your past recommendations will appear here.',
+                style: AppTypography.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              CozyButton(
+                label: 'Get Recommendations',
+                onPressed: () => setState(() => _showHistory = false),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: provider.history.length,
+      itemBuilder: (context, index) {
+        final session = provider.history[index];
+        return _buildHistoryCard(session, provider);
+      },
+    );
+  }
+
+  Widget _buildHistoryCard(RecommendationSession session, RecommendationsProvider provider) {
+    final modeLabel = switch (session.mode) {
+      RecommendationMode.surpriseMe => '🎁 Surprise Me',
+      RecommendationMode.moreLike => '📚 More Like...',
+      RecommendationMode.genrePick => '🎯 Genre Pick',
+    };
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        onTap: () {
+          provider.selectSession(session);
+          setState(() => _showHistory = false);
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(modeLabel, style: AppTypography.titleMedium),
+                  ),
+                  Text(
+                    _formatDate(session.createdAt),
+                    style: AppTypography.labelSmall.copyWith(color: AppColors.textLight),
+                  ),
+                ],
+              ),
+              if (session.genreFilter != null) ...[
+                const SizedBox(height: 4),
+                Text('Genre: ${session.genreFilter}', style: AppTypography.bodySmall),
+              ],
+              const SizedBox(height: 8),
+              Text(
+                '${session.recommendations.length} books recommended',
+                style: AppTypography.bodySmall.copyWith(color: AppColors.forestGreen),
+              ),
+              const SizedBox(height: 8),
+              // Preview of book covers
+              SizedBox(
+                height: 50,
+                child: Row(
+                  children: session.recommendations.take(4).map((rec) {
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: rec.book.coverUrl != null
+                            ? Image.network(rec.book.coverUrl!, width: 35, height: 50, fit: BoxFit.cover)
+                            : Container(width: 35, height: 50, color: AppColors.beige),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+    if (diff.inDays == 0) return 'Today';
+    if (diff.inDays == 1) return 'Yesterday';
+    if (diff.inDays < 7) return '${diff.inDays} days ago';
+    return '${date.day}/${date.month}/${date.year}';
   }
 
   Widget _buildLoadingState() {
@@ -429,9 +561,12 @@ class _RecommendationsScreenState extends State<RecommendationsScreen> {
             itemCount: provider.currentRecommendations.length,
             itemBuilder: (context, index) {
               final rec = provider.currentRecommendations[index];
+              final authProvider = context.read<AuthProvider>();
+              final affiliatePref = authProvider.user?.affiliatePreference ?? AffiliatePreference.amazon;
               return RecommendationBookCard(
                 book: rec.book,
                 reason: rec.reason,
+                affiliatePreference: affiliatePref,
                 onWishlist: () => provider.updateRecommendationStatus(
                   rec.id,
                   RecommendationStatus.wishlisted,
