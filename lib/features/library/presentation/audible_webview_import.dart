@@ -104,18 +104,36 @@ class _AudibleWebViewImportState extends State<AudibleWebViewImport> {
     });
   }
   
-  // Method 5: Fallback - find any element with book cover images and extract nearby text
+  // Method 5: Fallback - find book cover images but ONLY in library section
   if (books.length === 0) {
-    var imgs = document.querySelectorAll('img[src*="images-na.ssl-images-amazon"], img[src*="m.media-amazon"]');
+    // Try to find the main library container first
+    var librarySection = document.querySelector('[class*="library-content"], [class*="LibraryContent"], #library-content, main, [role="main"]');
+    var searchRoot = librarySection || document;
+    
+    // Exclude recommendation sections
+    var excludeSelectors = ['[class*="recommend"]', '[class*="Recommend"]', '[class*="discovery"]', '[class*="Discovery"]', '[class*="similar"]', '[class*="upsell"]', 'footer', '[class*="footer"]'];
+    
+    var imgs = searchRoot.querySelectorAll('img[src*="images-na.ssl-images-amazon"], img[src*="m.media-amazon"]');
     imgs.forEach(function(img) {
+      // Skip if inside a recommendation section
+      for (var j = 0; j < excludeSelectors.length; j++) {
+        if (img.closest(excludeSelectors[j])) return;
+      }
+      
       var container = img.closest('li, div[class*="row"], div[class*="item"], article');
       if (container) {
+        // Skip if container is inside excluded sections
+        for (var k = 0; k < excludeSelectors.length; k++) {
+          if (container.closest(excludeSelectors[k])) return;
+        }
+        
         var allText = container.textContent;
         var lines = allText.split('\\n').map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 2; });
         var title = lines[0] || '';
         var authorMatch = allText.match(/(?:Von:|By:?)\\s*([^\\n]+)/i);
         
-        if (title.length > 3 && !title.match(/^(Alle|All|Filter|Menu|\\d+)\$/i)) {
+        // More strict filtering
+        if (title.length > 3 && title.length < 200 && !title.match(/^(Alle|All|Filter|Menu|Empfohlen|Recommended|Entdecken|Discover|\\d+)\$/i)) {
           books.push({
             title: title,
             author: authorMatch ? authorMatch[1].trim() : 'Unknown',
@@ -339,16 +357,29 @@ class _AudibleWebViewImportState extends State<AudibleWebViewImport> {
   }
 
   Future<void> _scrollToLoadAll() async {
-    // Scroll down to trigger lazy loading
-    for (var i = 0; i < 5; i++) {
+    // Scroll down incrementally to trigger lazy loading
+    // 236 books needs ~25-30 scroll iterations
+    setState(() => _statusMessage = 'Loading all books (scrolling)...');
+    
+    for (var i = 0; i < 30; i++) {
       await _controller.runJavaScript('''
-        window.scrollTo(0, document.body.scrollHeight);
+        window.scrollBy(0, window.innerHeight * 2);
       ''');
-      await Future.delayed(const Duration(milliseconds: 500));
+      await Future.delayed(const Duration(milliseconds: 400));
+      
+      // Update status every 5 scrolls
+      if (i % 5 == 0 && mounted) {
+        setState(() => _statusMessage = 'Loading books... scroll \${i+1}/30');
+      }
     }
+    
     // Scroll back to top
     await _controller.runJavaScript('window.scrollTo(0, 0);');
     await Future.delayed(const Duration(milliseconds: 500));
+    
+    if (mounted) {
+      setState(() => _statusMessage = 'Extracting book data...');
+    }
   }
 
   @override
