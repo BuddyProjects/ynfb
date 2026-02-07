@@ -22,8 +22,12 @@ import 'features/onboarding/presentation/onboarding_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Load environment variables
-  await dotenv.load(fileName: '.env');
+  // Load environment variables (fail gracefully if .env is missing or invalid)
+  try {
+    await dotenv.load(fileName: '.env');
+  } catch (e) {
+    debugPrint('Note: .env not loaded ($e) - running in demo mode');
+  }
   
   // Check if onboarding has been completed
   final prefs = await SharedPreferences.getInstance();
