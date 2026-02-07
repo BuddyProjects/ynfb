@@ -229,16 +229,16 @@ class _AudibleWebViewImportState extends State<AudibleWebViewImport> {
         
         if (isLogin) {
           _statusMessage = 'Please log in to your Audible account';
-        } else if (isLibrary && !hasContent) {
-          _statusMessage = 'Waiting for library to load...';
-          // Try again after a delay
-          Future.delayed(const Duration(seconds: 2), () {
-            if (mounted && !_isExtracting) _checkCurrentPage();
-          });
         } else if (isLibrary && hasContent) {
           _statusMessage = 'Library found! Tap "Import Library" below';
+        } else if (isLibrary && !hasContent) {
+          _statusMessage = 'Library page detected but no books found. If you see books, tap "Force Import"';
+          // Try again after a delay
+          Future.delayed(const Duration(seconds: 3), () {
+            if (mounted && !_isExtracting) _checkCurrentPage();
+          });
         } else {
-          _statusMessage = 'Navigate to your library to import';
+          _statusMessage = 'Navigate to your library. If you see books, tap "Force Import"';
         }
       });
     } catch (e) {
@@ -413,8 +413,8 @@ class _AudibleWebViewImportState extends State<AudibleWebViewImport> {
             child: WebViewWidget(controller: _controller),
           ),
           
-          // Import button
-          if (_isOnLibraryPage && !_isExtracting)
+          // Import button - always show, different styling based on detection
+          if (!_isExtracting)
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -433,9 +433,13 @@ class _AudibleWebViewImportState extends State<AudibleWebViewImport> {
                   child: ElevatedButton.icon(
                     onPressed: _extractLibrary,
                     icon: const Icon(Icons.download_rounded),
-                    label: const Text('Import Library'),
+                    label: Text(_isOnLibraryPage 
+                        ? 'Import Library' 
+                        : 'Force Import (if you see books)'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.burntOrange,
+                      backgroundColor: _isOnLibraryPage 
+                          ? AppColors.burntOrange 
+                          : AppColors.forestGreen,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
