@@ -4,7 +4,16 @@ import '../features/library/domain/book.dart';
 import '../features/recommendations/domain/recommendation.dart';
 
 class SupabaseService {
-  static SupabaseClient get client => Supabase.instance.client;
+  static bool _isInitialized = false;
+  
+  static bool get isInitialized => _isInitialized;
+  
+  static SupabaseClient get client {
+    if (!_isInitialized) {
+      throw StateError('Supabase not initialized. Running in demo mode.');
+    }
+    return Supabase.instance.client;
+  }
 
   // Initialize Supabase
   static Future<void> initialize({
@@ -15,6 +24,7 @@ class SupabaseService {
       url: url,
       anonKey: anonKey,
     );
+    _isInitialized = true;
   }
 
   // Auth methods

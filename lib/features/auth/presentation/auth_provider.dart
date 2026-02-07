@@ -26,8 +26,23 @@ class AuthProvider extends ChangeNotifier {
   AppUser? get user => _user;
   String? get errorMessage => _errorMessage;
   bool get isAuthenticated => _status == AuthStatus.authenticated;
+  
+  // Demo mode: create a fake user ID for local storage
+  String get currentUserId => _user?.id ?? 'demo-user';
 
   void _init() {
+    // In demo mode (Supabase not configured), use a local demo user
+    if (!SupabaseService.isInitialized) {
+      _user = AppUser(
+        id: 'demo-user',
+        email: 'demo@ynfb.app',
+        createdAt: DateTime.now(),
+      );
+      _status = AuthStatus.authenticated;
+      notifyListeners();
+      return;
+    }
+    
     // Listen to auth state changes
     _supabaseService.authStateChanges.listen((data) async {
       final session = data.session;
