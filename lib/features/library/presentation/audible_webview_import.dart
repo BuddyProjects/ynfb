@@ -30,10 +30,31 @@ class _AudibleWebViewImportState extends State<AudibleWebViewImport> {
 (function() {
   var books = [];
   
+  // Helper: Check if item is from Audible Plus catalog (not purchased)
+  // Plus items have "Remove from Library" / "Aus der Bibliothek entfernen" option
+  function isPlusItem(element) {
+    var text = element.textContent || '';
+    // Check for "Remove from Library" indicators (English and German)
+    if (text.includes('Remove from Library') || 
+        text.includes('Aus der Bibliothek entfernen') ||
+        text.includes('Remove from library') ||
+        text.includes('aus der Bibliothek entfernen')) {
+      return true;
+    }
+    // Also check for Plus badge/label
+    if (element.querySelector('[class*="plus-badge"], [class*="PlusBadge"], [class*="plus-label"]')) {
+      return true;
+    }
+    return false;
+  }
+  
   // Method 1: Try the product rows (current Audible layout)
   var rows = document.querySelectorAll('[id^="adbl-library-content-row-"]');
   if (rows.length > 0) {
     rows.forEach(function(row) {
+      // Skip Audible Plus items
+      if (isPlusItem(row)) return;
+      
       var titleEl = row.querySelector('.bc-heading a, .bc-text a, [class*="title"] a');
       var authorEl = row.querySelector('[class*="author"] a, .authorLabel a, .bc-color-secondary a');
       var narratorEl = row.querySelector('[class*="narrator"] a');
@@ -52,6 +73,9 @@ class _AudibleWebViewImportState extends State<AudibleWebViewImport> {
   if (books.length === 0) {
     var items = document.querySelectorAll('.adbl-library-content-row, .library-item, [class*="LibraryItem"]');
     items.forEach(function(item) {
+      // Skip Audible Plus items
+      if (isPlusItem(item)) return;
+      
       var titleEl = item.querySelector('h2 a, h3 a, .bc-heading a, [class*="title"]');
       var authorEl = item.querySelector('[class*="author"], .authorLabel');
       
@@ -69,6 +93,9 @@ class _AudibleWebViewImportState extends State<AudibleWebViewImport> {
   if (books.length === 0) {
     var products = document.querySelectorAll('[class*="product"], [class*="Product"], .adbl-prod');
     products.forEach(function(prod) {
+      // Skip Audible Plus items
+      if (isPlusItem(prod)) return;
+      
       var title = prod.querySelector('[class*="title"], h2, h3');
       var author = prod.querySelector('[class*="author"]');
       
@@ -89,6 +116,8 @@ class _AudibleWebViewImportState extends State<AudibleWebViewImport> {
     listItems.forEach(function(item) {
       // Skip items in excluded sections
       if (item.closest('[class*="recommend"], [class*="discovery"], [class*="plus-catalog"], footer')) return;
+      // Skip Audible Plus items
+      if (isPlusItem(item)) return;
       
       var titleEl = item.querySelector('a[class*="bc-link"], h2, h3, [class*="Title"], span[class*="bc-text"]');
       var authorText = item.textContent;
@@ -132,6 +161,8 @@ class _AudibleWebViewImportState extends State<AudibleWebViewImport> {
         for (var k = 0; k < excludeSelectors.length; k++) {
           if (container.closest(excludeSelectors[k])) return;
         }
+        // Skip Audible Plus items
+        if (isPlusItem(container)) return;
         
         var allText = container.textContent;
         // REQUIRE "Von:" or "By:" pattern - no author = skip
