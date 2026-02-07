@@ -93,7 +93,7 @@ class _AudibleWebViewImportState extends State<AudibleWebViewImport> {
       if (titleEl && titleEl.textContent.trim().length > 2) {
         var title = titleEl.textContent.trim();
         // Skip if it looks like navigation/UI text
-        if (title.length > 3 && !title.match(/^(Alle|All|Filter|Sort|Menu|Bibliothek|Library)$/i)) {
+        if (title.length > 3 && !title.match(/^(Alle|All|Filter|Sort|Menu|Bibliothek|Library)\$/i)) {
           books.push({
             title: title,
             author: authorMatch ? authorMatch[1].trim() : 'Unknown',
@@ -115,7 +115,7 @@ class _AudibleWebViewImportState extends State<AudibleWebViewImport> {
         var title = lines[0] || '';
         var authorMatch = allText.match(/(?:Von:|By:?)\\s*([^\\n]+)/i);
         
-        if (title.length > 3 && !title.match(/^(Alle|All|Filter|Menu|\\d+)$/i)) {
+        if (title.length > 3 && !title.match(/^(Alle|All|Filter|Menu|\\d+)\$/i)) {
           books.push({
             title: title,
             author: authorMatch ? authorMatch[1].trim() : 'Unknown',
