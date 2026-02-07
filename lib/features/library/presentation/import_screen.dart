@@ -11,6 +11,7 @@ import '../../../services/open_library_service.dart';
 import '../../../services/import_service.dart';
 import '../domain/book.dart';
 import 'library_provider.dart';
+import 'audible_webview_import.dart';
 
 class ImportScreen extends StatelessWidget {
   final Function(BookSource) onSourceSelected;
@@ -81,221 +82,34 @@ class ImportScreen extends StatelessWidget {
   }
 }
 
-/// Guide screen for importing from Audible
-class AudibleImportGuide extends StatefulWidget {
+/// Launcher for Audible WebView import
+/// This just redirects to the WebView-based import screen
+class AudibleImportGuide extends StatelessWidget {
   const AudibleImportGuide({super.key});
 
   @override
-  State<AudibleImportGuide> createState() => _AudibleImportGuideState();
-}
-
-class _AudibleImportGuideState extends State<AudibleImportGuide> {
-  bool _isImporting = false;
-  final _importService = const ImportService();
-
-  Future<void> _handleUploadCsv() async {
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['csv'],
-        withData: true,
-      );
-
-      if (result == null || result.files.isEmpty) return;
-
-      final file = result.files.first;
-      if (file.bytes == null) {
-        _showError('Could not read file');
-        return;
-      }
-
-      setState(() => _isImporting = true);
-
-      final csvContent = utf8.decode(file.bytes!);
-      final bookData = _importService.parseAudibleCsv(csvContent);
-
-      if (bookData.isEmpty) {
-        _showError('No books found in the CSV file');
-        setState(() => _isImporting = false);
-        return;
-      }
-
-      if (!mounted) return;
-
-      final libraryProvider = context.read<LibraryProvider>();
-      final importedCount = await libraryProvider.importBooks(
-        bookData: bookData,
-        userId: 'demo-user',
-        source: BookSource.audible,
-      );
-
-      setState(() => _isImporting = false);
-
-      if (!mounted) return;
-
-      _showSuccess(importedCount, bookData.length);
-      Navigator.of(context).popUntil((route) => route.isFirst);
-    } on FormatException catch (e) {
-      setState(() => _isImporting = false);
-      _showError(e.message);
-    } catch (e) {
-      setState(() => _isImporting = false);
-      _showError('Failed to import: $e');
-    }
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: AppColors.error,
-      ),
-    );
-  }
-
-  void _showSuccess(int imported, int total) {
-    final skipped = total - imported;
-    final message = skipped > 0
-        ? 'Imported $imported books! ($skipped already in library)'
-        : 'Imported $imported books!';
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: AppColors.forestGreen,
-      ),
-    );
-  }
-
-  @override
   Widget build(BuildContext context) {
+    // Immediately navigate to the WebView import
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => const AudibleWebViewImport(),
+        ),
+      );
+    });
+
+    // Show a loading indicator while redirecting
     return Scaffold(
       backgroundColor: AppColors.cream,
-      appBar: AppBar(
-        title: Text('Import from Audible', style: AppTypography.headlineMedium),
-      ),
-      body: _isImporting
-          ? const _ImportingIndicator(source: 'Audible')
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildStep(
-                    number: 1,
-                    title: 'Go to your Audible library',
-                    description: 'Visit audible.com and sign in to your account.',
-                    link: 'audible.com/library',
-                  ),
-                  const SizedBox(height: 24),
-                  _buildStep(
-                    number: 2,
-                    title: 'Export your library',
-                    description:
-                        'Look for the "Export Library" or download option. Select CSV format if available.',
-                  ),
-                  const SizedBox(height: 24),
-                  _buildStep(
-                    number: 3,
-                    title: 'Upload your CSV file',
-                    description:
-                        'Tap the button below and select the CSV file you downloaded.',
-                  ),
-                  const SizedBox(height: 32),
-                  CozyButton(
-                    label: 'Upload CSV File',
-                    icon: Icons.upload_file_rounded,
-                    onPressed: _handleUploadCsv,
-                    isFullWidth: true,
-                  ),
-                  const SizedBox(height: 16),
-                  _buildHint(),
-                ],
-              ),
-            ),
-    );
-  }
-
-  Widget _buildStep({
-    required int number,
-    required String title,
-    required String description,
-    String? link,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 32,
-          height: 32,
-          decoration: const BoxDecoration(
-            color: AppColors.burntOrange,
-            shape: BoxShape.circle,
-          ),
-          child: Center(
-            child: Text(
-              number.toString(),
-              style: AppTypography.titleSmall.copyWith(color: Colors.white),
-            ),
-          ),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const CircularProgressIndicator(color: AppColors.burntOrange),
+            const SizedBox(height: 16),
+            Text('Opening Audible...', style: AppTypography.bodyMedium),
+          ],
         ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: AppTypography.titleMedium),
-              const SizedBox(height: 4),
-              Text(description, style: AppTypography.bodyMedium),
-              if (link != null) ...[
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.beige,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    link,
-                    style: AppTypography.labelMedium.copyWith(
-                      color: AppColors.burntOrange,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildHint() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.forestGreen.withAlpha(26),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.lightbulb_outline_rounded,
-            color: AppColors.forestGreen,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              "Can't find export? Try searching 'download library' in Audible's help section.",
-              style: AppTypography.bodySmall.copyWith(
-                color: AppColors.forestGreen,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
