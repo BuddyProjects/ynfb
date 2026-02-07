@@ -72,6 +72,11 @@ class YNFBApp extends StatelessWidget {
         Provider<AIRecommendationService>.value(value: aiService),
         Provider<SupabaseService>.value(value: supabaseService),
         
+        // Auth Provider (for user context)
+        ChangeNotifierProvider(
+          create: (_) => AuthProvider(supabaseService),
+        ),
+        
         // Library Provider
         ChangeNotifierProvider(
           create: (_) => LibraryProvider(supabaseService, openLibraryService),
