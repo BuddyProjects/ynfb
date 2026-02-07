@@ -40,6 +40,9 @@ dependencies:
   intl: ^0.19.0
   uuid: ^4.5.1
   url_launcher: ^6.3.1
+  
+  # Environment Config
+  flutter_dotenv: ^5.2.1
 
 dev_dependencies:
   flutter_test:
@@ -52,6 +55,7 @@ flutter:
   assets:
     - assets/images/
     - assets/icons/
+    - .env
 
   # Fonts - uncomment when adding custom fonts
   # fonts:

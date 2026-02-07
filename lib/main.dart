@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'config/app_config.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/app_colors.dart';
 import 'core/theme/app_typography.dart';
@@ -20,15 +22,20 @@ import 'features/onboarding/presentation/onboarding_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
+  // Load environment variables
+  await dotenv.load(fileName: '.env');
+  
   // Check if onboarding has been completed
   final prefs = await SharedPreferences.getInstance();
   final hasCompletedOnboarding = prefs.getBool('onboarding_complete') ?? false;
   
-  // TODO: Initialize Supabase when configured
-  // await SupabaseService.initialize(
-  //   url: 'YOUR_SUPABASE_URL',
-  //   anonKey: 'YOUR_SUPABASE_ANON_KEY',
-  // );
+  // Initialize Supabase if configured
+  if (AppConfig.hasSupabase) {
+    await SupabaseService.initialize(
+      url: AppConfig.supabaseUrl!,
+      anonKey: AppConfig.supabaseAnonKey!,
+    );
+  }
 
   runApp(YNFBApp(hasCompletedOnboarding: hasCompletedOnboarding));
 }
@@ -44,6 +51,15 @@ class YNFBApp extends StatelessWidget {
     final openLibraryService = OpenLibraryService();
     final aiService = AIRecommendationService();
     final supabaseService = SupabaseService();
+    
+    // Configure AI service if API key is available
+    if (!AppConfig.isDemoMode) {
+      aiService.configure(
+        apiKey: AppConfig.aiApiKey!,
+        baseUrl: AppConfig.aiBaseUrl,
+        model: AppConfig.aiModel,
+      );
+    }
 
     return MultiProvider(
       providers: [
@@ -129,19 +145,29 @@ class _MainShellState extends State<MainShell> {
       MaterialPageRoute(
         builder: (_) => ImportScreen(
           onSourceSelected: (source) {
-            Navigator.pop(context); // Close import screen
-            
             switch (source) {
               case BookSource.manual:
+                Navigator.pop(context); // Close import screen
                 _openManualAddScreen();
                 break;
               case BookSource.audible:
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const AudibleImportGuide(),
+                  ),
+                );
+                break;
               case BookSource.kindle:
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const KindleImportGuide(),
+                  ),
+                );
+                break;
               case BookSource.goodreads:
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Import from ${source.label} coming soon!'),
-                    backgroundColor: AppColors.forestGreen,
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const GoodreadsImportGuide(),
                   ),
                 );
                 break;
