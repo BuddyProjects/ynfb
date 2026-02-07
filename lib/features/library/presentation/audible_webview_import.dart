@@ -144,15 +144,38 @@ class _AudibleWebViewImportState extends State<AudibleWebViewImport> {
     });
   }
   
+  // Filter out likely Audible Plus freebies (public domain classics)
+  var classicAuthors = ['shakespeare', 'twain', 'dickens', 'austen', 'thoreau', 'melville', 'dostoevsky', 'tolstoy', 'homer', 'plato', 'aristotle', 'darwin', 'poe', 'wilde', 'doyle', 'verne', 'wells', 'shelley', 'stoker', 'bronte', 'joyce', 'kafka', 'nietzsche', 'marx', 'freud'];
+  
+  var filteredBooks = books.filter(function(book) {
+    var authorLower = (book.author || '').toLowerCase();
+    var titleLower = (book.title || '').toLowerCase();
+    
+    // Skip if author is a classic author AND title looks like a classic
+    for (var i = 0; i < classicAuthors.length; i++) {
+      if (authorLower.includes(classicAuthors[i])) {
+        // Check if it's likely a public domain work
+        if (titleLower.includes('complete') || titleLower.includes('collected') || 
+            titleLower.includes('walden') || titleLower.includes('hamlet') ||
+            titleLower.includes('romeo') || titleLower.includes('macbeth')) {
+          return false;
+        }
+      }
+    }
+    return true;
+  });
+  
   return JSON.stringify({
     success: true,
-    count: books.length,
-    books: books,
+    count: filteredBooks.length,
+    books: filteredBooks,
     url: window.location.href,
     debug: {
       method1: document.querySelectorAll('[id^="adbl-library-content-row-"]').length,
       method2: document.querySelectorAll('.adbl-library-content-row, .library-item').length,
-      method3: document.querySelectorAll('[class*="product"]').length
+      method3: document.querySelectorAll('[class*="product"]').length,
+      totalBeforeFilter: books.length,
+      filteredOut: books.length - filteredBooks.length
     }
   });
 })();
@@ -269,26 +292,55 @@ class _AudibleWebViewImportState extends State<AudibleWebViewImport> {
     
     setState(() {
       _isExtracting = true;
-      _statusMessage = 'Extracting your library...';
+      _statusMessage = 'Checking pages...';
     });
 
     try {
-      // First, scroll to load all books (Audible uses lazy loading)
-      await _scrollToLoadAll();
+      // Get total pages
+      final totalPages = await _getTotalPages();
+      debugPrint('Total pages detected: $totalPages');
       
-      // Now extract
-      final result = await _controller.runJavaScriptReturningResult(_extractionScript);
+      List<Map<String, dynamic>> allBooks = [];
       
-      // Parse the result - handle escaped JSON
-      String jsonStr = result.toString();
-      if (jsonStr.startsWith('"') && jsonStr.endsWith('"')) {
-        jsonStr = jsonStr.substring(1, jsonStr.length - 1);
-        jsonStr = jsonStr.replaceAll(r'\"', '"').replaceAll(r'\\', '\\');
+      // Extract from each page
+      for (var page = 1; page <= totalPages; page++) {
+        if (!mounted) return;
+        
+        setState(() {
+          _statusMessage = 'Extracting page $page of $totalPages...';
+        });
+        
+        // Scroll to load content on current page
+        await _scrollToLoadAll();
+        
+        // Extract from current page
+        final result = await _controller.runJavaScriptReturningResult(_extractionScript);
+        
+        // Parse the result
+        String jsonStr = result.toString();
+        if (jsonStr.startsWith('"') && jsonStr.endsWith('"')) {
+          jsonStr = jsonStr.substring(1, jsonStr.length - 1);
+          jsonStr = jsonStr.replaceAll(r'\"', '"').replaceAll(r'\\', '\\');
+        }
+        
+        try {
+          final data = json.decode(jsonStr);
+          if (data['success'] == true && data['books'] != null) {
+            final List<dynamic> pageBooks = data['books'];
+            allBooks.addAll(pageBooks.cast<Map<String, dynamic>>());
+            debugPrint('Page $page: found ${pageBooks.length} books');
+          }
+        } catch (e) {
+          debugPrint('Error parsing page $page: $e');
+        }
+        
+        // Go to next page if not last
+        if (page < totalPages) {
+          await _goToNextPage();
+        }
       }
       
-      final data = json.decode(jsonStr);
-      
-      if (data['success'] != true || data['count'] == 0) {
+      if (allBooks.isEmpty) {
         _extractAttempts++;
         if (_extractAttempts < 3) {
           setState(() {
@@ -306,11 +358,15 @@ class _AudibleWebViewImportState extends State<AudibleWebViewImport> {
         return;
       }
       
-      final List<dynamic> books = data['books'];
-      final bookData = books.map<Map<String, String>>((b) => {
-        'title': b['title']?.toString() ?? '',
-        'author': b['author']?.toString() ?? 'Unknown',
-      }).where((b) => b['title']!.isNotEmpty).toList();
+      // Deduplicate by title
+      final seen = <String>{};
+      final bookData = allBooks
+          .map<Map<String, String>>((b) => {
+            'title': b['title']?.toString() ?? '',
+            'author': b['author']?.toString() ?? 'Unknown',
+          })
+          .where((b) => b['title']!.isNotEmpty && seen.add(b['title']!.toLowerCase()))
+          .toList();
       
       if (bookData.isEmpty) {
         setState(() {
@@ -357,29 +413,54 @@ class _AudibleWebViewImportState extends State<AudibleWebViewImport> {
   }
 
   Future<void> _scrollToLoadAll() async {
-    // Scroll down incrementally to trigger lazy loading
-    // 236 books needs ~25-30 scroll iterations
-    setState(() => _statusMessage = 'Loading all books (scrolling)...');
-    
-    for (var i = 0; i < 30; i++) {
-      await _controller.runJavaScript('''
-        window.scrollBy(0, window.innerHeight * 2);
-      ''');
-      await Future.delayed(const Duration(milliseconds: 400));
-      
-      // Update status every 5 scrolls
-      if (i % 5 == 0 && mounted) {
-        setState(() => _statusMessage = 'Loading books... scroll \${i+1}/30');
-      }
-    }
-    
-    // Scroll back to top
-    await _controller.runJavaScript('window.scrollTo(0, 0);');
-    await Future.delayed(const Duration(milliseconds: 500));
-    
+    // German Audible uses pagination, not infinite scroll
+    // We'll extract current page, then navigate to next pages
     if (mounted) {
-      setState(() => _statusMessage = 'Extracting book data...');
+      setState(() => _statusMessage = 'Preparing to extract...');
     }
+    
+    // Just scroll to ensure current page is loaded
+    await _controller.runJavaScript('window.scrollTo(0, document.body.scrollHeight);');
+    await Future.delayed(const Duration(milliseconds: 500));
+    await _controller.runJavaScript('window.scrollTo(0, 0);');
+    await Future.delayed(const Duration(milliseconds: 300));
+  }
+  
+  Future<int> _getTotalPages() async {
+    try {
+      final result = await _controller.runJavaScriptReturningResult('''
+        (function() {
+          // Look for "Seite X von Y" or "Page X of Y" pattern
+          var pageText = document.body.innerText;
+          var match = pageText.match(/(?:Seite|Page)\\s+(\\d+)\\s+(?:von|of)\\s+(\\d+)/i);
+          return match ? parseInt(match[2]) : 1;
+        })();
+      ''');
+      return int.tryParse(result.toString()) ?? 1;
+    } catch (e) {
+      return 1;
+    }
+  }
+  
+  Future<void> _goToNextPage() async {
+    await _controller.runJavaScript('''
+      (function() {
+        // Find and click next page button
+        var nextBtn = document.querySelector('[class*="page"][class*="next"], a[aria-label*="Next"], a[aria-label*="nächste"], button[aria-label*="Next"], .pagination-next, [class*="nextPage"]');
+        if (!nextBtn) {
+          // Try finding by > symbol or arrow
+          var arrows = document.querySelectorAll('a, button');
+          for (var i = 0; i < arrows.length; i++) {
+            if (arrows[i].textContent.trim() === '>' || arrows[i].textContent.includes('›')) {
+              nextBtn = arrows[i];
+              break;
+            }
+          }
+        }
+        if (nextBtn) nextBtn.click();
+      })();
+    ''');
+    await Future.delayed(const Duration(seconds: 2)); // Wait for page load
   }
 
   @override
