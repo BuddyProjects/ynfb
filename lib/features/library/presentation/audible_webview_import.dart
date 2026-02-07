@@ -83,20 +83,28 @@ class _AudibleWebViewImportState extends State<AudibleWebViewImport> {
   }
   
   // Method 4: German Audible / bc-list layout (handles "Von:" author prefix)
+  // Only accept items that have BOTH a clear title AND "Von:" author pattern
   if (books.length === 0) {
     var listItems = document.querySelectorAll('li[class*="bc-list-item"], [class*="library"] li, [class*="Library"] li');
     listItems.forEach(function(item) {
+      // Skip items in excluded sections
+      if (item.closest('[class*="recommend"], [class*="discovery"], [class*="plus-catalog"], footer')) return;
+      
       var titleEl = item.querySelector('a[class*="bc-link"], h2, h3, [class*="Title"], span[class*="bc-text"]');
       var authorText = item.textContent;
-      var authorMatch = authorText.match(/(?:Von:|By:?)\\s*([^\\n]+)/i);
+      var authorMatch = authorText.match(/(?:Von:|By:)\\s*([^\\n,]+)/i);
       
-      if (titleEl && titleEl.textContent.trim().length > 2) {
+      // MUST have both title AND "Von:/By:" author to be considered a library item
+      if (titleEl && authorMatch) {
         var title = titleEl.textContent.trim();
-        // Skip if it looks like navigation/UI text
-        if (title.length > 3 && !title.match(/^(Alle|All|Filter|Sort|Menu|Bibliothek|Library)\$/i)) {
+        var author = authorMatch[1].trim();
+        
+        // Skip navigation/UI text and items without real authors
+        if (title.length > 3 && author.length > 2 && 
+            !title.match(/^(Alle|All|Filter|Sort|Menu|Bibliothek|Library|Hörbücher|Podcasts)\$/i)) {
           books.push({
             title: title,
-            author: authorMatch ? authorMatch[1].trim() : 'Unknown',
+            author: author,
             narrator: null
           });
         }
@@ -104,39 +112,41 @@ class _AudibleWebViewImportState extends State<AudibleWebViewImport> {
     });
   }
   
-  // Method 5: Fallback - find book cover images but ONLY in library section
+  // Method 5: Fallback - ONLY if other methods found nothing
+  // This is very strict: requires "Von:" pattern and excludes many sections
   if (books.length === 0) {
-    // Try to find the main library container first
     var librarySection = document.querySelector('[class*="library-content"], [class*="LibraryContent"], #library-content, main, [role="main"]');
     var searchRoot = librarySection || document;
     
-    // Exclude recommendation sections
-    var excludeSelectors = ['[class*="recommend"]', '[class*="Recommend"]', '[class*="discovery"]', '[class*="Discovery"]', '[class*="similar"]', '[class*="upsell"]', 'footer', '[class*="footer"]'];
+    var excludeSelectors = ['[class*="recommend"]', '[class*="Recommend"]', '[class*="discovery"]', '[class*="Discovery"]', '[class*="similar"]', '[class*="upsell"]', '[class*="plus"]', '[class*="Plus"]', '[class*="catalog"]', '[class*="Catalog"]', 'footer', '[class*="footer"]', '[class*="banner"]'];
     
     var imgs = searchRoot.querySelectorAll('img[src*="images-na.ssl-images-amazon"], img[src*="m.media-amazon"]');
     imgs.forEach(function(img) {
-      // Skip if inside a recommendation section
+      // Skip if inside excluded sections
       for (var j = 0; j < excludeSelectors.length; j++) {
         if (img.closest(excludeSelectors[j])) return;
       }
       
       var container = img.closest('li, div[class*="row"], div[class*="item"], article');
       if (container) {
-        // Skip if container is inside excluded sections
         for (var k = 0; k < excludeSelectors.length; k++) {
           if (container.closest(excludeSelectors[k])) return;
         }
         
         var allText = container.textContent;
+        // REQUIRE "Von:" or "By:" pattern - no author = skip
+        var authorMatch = allText.match(/(?:Von:|By:)\\s*([^\\n,]+)/i);
+        if (!authorMatch) return;
+        
         var lines = allText.split('\\n').map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 2; });
         var title = lines[0] || '';
-        var authorMatch = allText.match(/(?:Von:|By:?)\\s*([^\\n]+)/i);
+        var author = authorMatch[1].trim();
         
-        // More strict filtering
-        if (title.length > 3 && title.length < 200 && !title.match(/^(Alle|All|Filter|Menu|Empfohlen|Recommended|Entdecken|Discover|\\d+)\$/i)) {
+        if (title.length > 3 && title.length < 150 && author.length > 2 &&
+            !title.match(/^(Alle|All|Filter|Menu|Empfohlen|Recommended|Entdecken|Discover|Gratis|Free|Plus|\\d+)\$/i)) {
           books.push({
             title: title,
-            author: authorMatch ? authorMatch[1].trim() : 'Unknown',
+            author: author,
             narrator: null
           });
         }
@@ -144,38 +154,25 @@ class _AudibleWebViewImportState extends State<AudibleWebViewImport> {
     });
   }
   
-  // Filter out likely Audible Plus freebies (public domain classics)
-  var classicAuthors = ['shakespeare', 'twain', 'dickens', 'austen', 'thoreau', 'melville', 'dostoevsky', 'tolstoy', 'homer', 'plato', 'aristotle', 'darwin', 'poe', 'wilde', 'doyle', 'verne', 'wells', 'shelley', 'stoker', 'bronte', 'joyce', 'kafka', 'nietzsche', 'marx', 'freud'];
-  
-  var filteredBooks = books.filter(function(book) {
-    var authorLower = (book.author || '').toLowerCase();
-    var titleLower = (book.title || '').toLowerCase();
-    
-    // Skip if author is a classic author AND title looks like a classic
-    for (var i = 0; i < classicAuthors.length; i++) {
-      if (authorLower.includes(classicAuthors[i])) {
-        // Check if it's likely a public domain work
-        if (titleLower.includes('complete') || titleLower.includes('collected') || 
-            titleLower.includes('walden') || titleLower.includes('hamlet') ||
-            titleLower.includes('romeo') || titleLower.includes('macbeth')) {
-          return false;
-        }
-      }
-    }
+  // Deduplicate by title (case-insensitive)
+  var seen = {};
+  var uniqueBooks = books.filter(function(book) {
+    var key = (book.title || '').toLowerCase().trim();
+    if (key.length < 3 || seen[key]) return false;
+    seen[key] = true;
     return true;
   });
   
   return JSON.stringify({
     success: true,
-    count: filteredBooks.length,
-    books: filteredBooks,
+    count: uniqueBooks.length,
+    books: uniqueBooks,
     url: window.location.href,
     debug: {
       method1: document.querySelectorAll('[id^="adbl-library-content-row-"]').length,
       method2: document.querySelectorAll('.adbl-library-content-row, .library-item').length,
       method3: document.querySelectorAll('[class*="product"]').length,
-      totalBeforeFilter: books.length,
-      filteredOut: books.length - filteredBooks.length
+      totalBeforeDedup: books.length
     }
   });
 })();
