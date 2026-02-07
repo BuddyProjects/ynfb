@@ -333,7 +333,7 @@ class _AudibleWebViewImportState extends State<AudibleWebViewImport> {
         
         // Go to next page if not last
         if (page < totalPages) {
-          await _goToNextPage();
+          await _goToPage(page + 1);
         }
       }
       
@@ -439,25 +439,28 @@ class _AudibleWebViewImportState extends State<AudibleWebViewImport> {
     }
   }
   
-  Future<void> _goToNextPage() async {
-    await _controller.runJavaScript('''
-      (function() {
-        // Find and click next page button
-        var nextBtn = document.querySelector('[class*="page"][class*="next"], a[aria-label*="Next"], a[aria-label*="nächste"], button[aria-label*="Next"], .pagination-next, [class*="nextPage"]');
-        if (!nextBtn) {
-          // Try finding by > symbol or arrow
-          var arrows = document.querySelectorAll('a, button');
-          for (var i = 0; i < arrows.length; i++) {
-            if (arrows[i].textContent.trim() === '>' || arrows[i].textContent.includes('›')) {
-              nextBtn = arrows[i];
-              break;
-            }
-          }
-        }
-        if (nextBtn) nextBtn.click();
-      })();
-    ''');
-    await Future.delayed(const Duration(seconds: 2)); // Wait for page load
+  Future<void> _goToPage(int pageNum) async {
+    // Navigate via URL parameter instead of clicking
+    // Audible uses ?page=X or adds to existing params
+    final currentUrl = await _controller.currentUrl() ?? '';
+    
+    String newUrl;
+    if (currentUrl.contains('page=')) {
+      // Replace existing page param
+      newUrl = currentUrl.replaceAll(RegExp(r'page=\d+'), 'page=$pageNum');
+    } else if (currentUrl.contains('?')) {
+      // Add page param to existing query
+      newUrl = '$currentUrl&page=$pageNum';
+    } else {
+      // Add page param as first query
+      newUrl = '$currentUrl?page=$pageNum';
+    }
+    
+    debugPrint('Navigating to page $pageNum: $newUrl');
+    await _controller.loadRequest(Uri.parse(newUrl));
+    
+    // Wait for page to fully load
+    await Future.delayed(const Duration(seconds: 3));
   }
 
   @override
