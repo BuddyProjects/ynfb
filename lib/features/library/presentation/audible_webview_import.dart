@@ -82,6 +82,50 @@ class _AudibleWebViewImportState extends State<AudibleWebViewImport> {
     });
   }
   
+  // Method 4: German Audible / bc-list layout (handles "Von:" author prefix)
+  if (books.length === 0) {
+    var listItems = document.querySelectorAll('li[class*="bc-list-item"], [class*="library"] li, [class*="Library"] li');
+    listItems.forEach(function(item) {
+      var titleEl = item.querySelector('a[class*="bc-link"], h2, h3, [class*="Title"], span[class*="bc-text"]');
+      var authorText = item.textContent;
+      var authorMatch = authorText.match(/(?:Von:|By:?)\\s*([^\\n]+)/i);
+      
+      if (titleEl && titleEl.textContent.trim().length > 2) {
+        var title = titleEl.textContent.trim();
+        // Skip if it looks like navigation/UI text
+        if (title.length > 3 && !title.match(/^(Alle|All|Filter|Sort|Menu|Bibliothek|Library)$/i)) {
+          books.push({
+            title: title,
+            author: authorMatch ? authorMatch[1].trim() : 'Unknown',
+            narrator: null
+          });
+        }
+      }
+    });
+  }
+  
+  // Method 5: Fallback - find any element with book cover images and extract nearby text
+  if (books.length === 0) {
+    var imgs = document.querySelectorAll('img[src*="images-na.ssl-images-amazon"], img[src*="m.media-amazon"]');
+    imgs.forEach(function(img) {
+      var container = img.closest('li, div[class*="row"], div[class*="item"], article');
+      if (container) {
+        var allText = container.textContent;
+        var lines = allText.split('\\n').map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 2; });
+        var title = lines[0] || '';
+        var authorMatch = allText.match(/(?:Von:|By:?)\\s*([^\\n]+)/i);
+        
+        if (title.length > 3 && !title.match(/^(Alle|All|Filter|Menu|\\d+)$/i)) {
+          books.push({
+            title: title,
+            author: authorMatch ? authorMatch[1].trim() : 'Unknown',
+            narrator: null
+          });
+        }
+      }
+    });
+  }
+  
   return JSON.stringify({
     success: true,
     count: books.length,
@@ -100,9 +144,34 @@ class _AudibleWebViewImportState extends State<AudibleWebViewImport> {
   static const String _checkPageScript = '''
 (function() {
   var url = window.location.href;
-  var isLibrary = url.includes('/library') || url.includes('/lib');
+  var isLibrary = url.includes('/library') || url.includes('/lib') || url.includes('/Bibliothek');
   var isLogin = url.includes('/signin') || url.includes('/ap/signin') || url.includes('/login');
-  var hasContent = document.querySelectorAll('[id^="adbl-library-content-row-"], .adbl-library-content-row, .library-item, [class*="LibraryItem"]').length > 0;
+  
+  // Check multiple selectors to handle different Audible regional layouts
+  var contentSelectors = [
+    '[id^="adbl-library-content-row-"]',
+    '.adbl-library-content-row',
+    '.library-item',
+    '[class*="LibraryItem"]',
+    '[class*="library-content"]',
+    '[class*="productListItem"]',
+    'li[class*="bc-list-item"]',
+    '[data-widget="library"]'
+  ];
+  
+  var hasContent = false;
+  for (var i = 0; i < contentSelectors.length; i++) {
+    if (document.querySelectorAll(contentSelectors[i]).length > 0) {
+      hasContent = true;
+      break;
+    }
+  }
+  
+  // Fallback: if URL is library and we see multiple images, assume content exists
+  if (!hasContent && isLibrary) {
+    var imgs = document.querySelectorAll('img[src*="images-na.ssl-images-amazon"], img[src*="m.media-amazon"]');
+    hasContent = imgs.length >= 3;
+  }
   
   return JSON.stringify({
     url: url,
